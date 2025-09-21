@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useRef } from "react";
-import Link from "next/link";
+import React, { useMemo, useState } from "react";
 import rawData from "../data/diagnostic";
+import RecordAudio from "./recordAudio";
 
 interface DiagnosticTestProps {
   currentPage?: string;
@@ -37,70 +37,24 @@ const DiagnosticTest = ({ currentPage = "training" }: DiagnosticTestProps) => {
   const [selectedAnswer, setSelectedAnswer] = useState("");
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
-
-  // Audio recording states and refs
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [hasAudioAnswer, setHasAudioAnswer] = useState(false);
 
   const totalQuestions = flatQuestions.length;
   const currentQ = flatQuestions[currentQuestion];
 
-  const navigationItems = [
-    { name: "Home", href: "/", key: "home" },
-    { name: "Training", href: "/training", key: "training" },
-    { name: "Progress", href: "/progress", key: "progress" },
-    { name: "Statistics", href: "/statistics", key: "statistics" },
-    { name: "Settings", href: "/settings", key: "settings" },
-  ];
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/wav",
-        });
-        const url = URL.createObjectURL(audioBlob);
-        setAudioUrl(url);
-        setHasAudioAnswer(true);
-        audioChunksRef.current = [];
-      };
-
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error("Error starting recording:", error);
-    }
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
-
-    // Stop all tracks to release microphone
-    const stream = mediaRecorderRef.current?.stream;
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-  };
-
   const handleSubmit = () => {
     const answerGiven = userAnswer || selectedAnswer;
-    if (!answerGiven && !hasAudioAnswer) return;
+    const transcriptionBox = document.getElementById("transcriptionBox");
+    const hasTranscription =
+      transcriptionBox &&
+      transcriptionBox.innerText &&
+      transcriptionBox.innerText !== "Transcription will appear here...";
 
-    // For audio answers, we'll need to implement speech-to-text or manual review
-    // For now, we'll assume audio answers are correct (you can modify this logic)
-    if (hasAudioAnswer) {
-      setIsCorrect(true); // Placeholder - implement actual audio processing
+    if (!answerGiven && !hasTranscription) return;
+
+    if (hasTranscription) {
+      setIsCorrect(true); // Assumes all answers are correct
+      setHasAudioAnswer(true);
     } else {
       setIsCorrect(normalize(answerGiven) === normalize(currentQ.answer));
     }
@@ -114,7 +68,6 @@ const DiagnosticTest = ({ currentPage = "training" }: DiagnosticTestProps) => {
       setSelectedAnswer("");
       setShowResult(false);
       setIsCorrect(false);
-      setAudioUrl(null);
       setHasAudioAnswer(false);
     }
   };
@@ -134,10 +87,10 @@ const DiagnosticTest = ({ currentPage = "training" }: DiagnosticTestProps) => {
                     ? option === currentQ.answer
                       ? "border-green-500 bg-green-50 text-green-800"
                       : "border-red-500 bg-red-50 text-red-800"
-                    : "border-purple-500 bg-purple-50 text-purple-800"
+                    : "border-white bg-purple-50 text-purple-800"
                   : showResult && option === currentQ.answer
                   ? "border-green-500 bg-green-50 text-green-800"
-                  : "border-gray-200 bg-white hover:border-gray-300 text-gray-800"
+                  : "border-gray-200 bg-white hover:border-gray-300 text-gray-700"
               }`}
             >
               {option}
@@ -150,42 +103,10 @@ const DiagnosticTest = ({ currentPage = "training" }: DiagnosticTestProps) => {
     // Audio recording interface for non-multiple-choice questions
     return (
       <div className="flex flex-col items-center justify-center my-6 space-y-4">
-        <div className="flex flex-col items-center gap-4">
-          {!isRecording ? (
-            <button
-              onClick={startRecording}
-              disabled={showResult}
-              className={`px-6 py-3 rounded-full font-semibold transition-all duration-200 ${
-                showResult
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-green-500 text-white hover:bg-green-600 hover:shadow-lg"
-              }`}
-            >
-              Start Recording
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="px-6 py-3 bg-red-500 text-white rounded-full font-semibold hover:bg-red-600 hover:shadow-lg transition-all duration-200"
-            >
-              Stop Recording
-            </button>
-          )}
-
-          {audioUrl && (
-            <div className="flex flex-col items-center gap-2">
-              <audio controls src={audioUrl} className="w-64" />
-              <p className="text-sm text-gray-600">Your recorded answer</p>
-            </div>
-          )}
-
-          {isRecording && (
-            <div className="flex items-center gap-2 text-red-600">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Recording...</span>
-            </div>
-          )}
-        </div>
+        <RecordAudio />
+        <p id="transcriptionBox" className="text-sm text-gray-600">
+          Transcription will appear here...
+        </p>
       </div>
     );
   };
@@ -212,52 +133,18 @@ const DiagnosticTest = ({ currentPage = "training" }: DiagnosticTestProps) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-indigo-400">
-      {/* Sidebar */}
-      <div className="w-55 text-white p-6">
-        <div className="flex items-center mb-8">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center mr-3">
-            <div className="w-6 h-6 bg-purple-500 rounded-full"></div>
-          </div>
-          <h1 className="text-xl font-bold">Dyslexia App</h1>
-        </div>
-        <nav className="space-y-2">
-          {navigationItems.map((item) => {
-            const isActive = currentPage === item.key;
-            return (
-              <Link
-                key={item.key}
-                href={item.href}
-                className={`px-4 py-3 rounded-full font-semibold flex items-center transition-colors ${
-                  isActive
-                    ? "bg-green-400 text-green-900"
-                    : "text-indigo-200 hover:text-white hover:bg-indigo-500"
-                }`}
-              >
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
+    <div className="flex flex-col min-h-screen ">
       {/* Main Content */}
       <div className="flex-1 bg-white rounded-l-3xl">
         <div className="flex justify-between items-center p-8 pb-4">
-          <div className="flex items-center">
-            <Link
-              href="/training"
-              className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
-            />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">
-                Diagnostic Test
-              </h2>
-              <p className="text-gray-600">
-                Question {currentQuestion + 1} of {totalQuestions}
-              </p>
-              <p className="text-xs text-gray-500">Type: {currentQ.type}</p>
-            </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">
+              Diagnostic Test
+            </h2>
+            <p className="text-gray-600">
+              Question {currentQuestion + 1} of {totalQuestions}
+            </p>
+            <p className="text-xs text-gray-500">Type: {currentQ.type}</p>
           </div>
         </div>
 

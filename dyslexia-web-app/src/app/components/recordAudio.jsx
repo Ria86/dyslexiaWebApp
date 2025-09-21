@@ -10,13 +10,26 @@ export default function RecordAudio() {
   //sending audio file to server
   const uploadAudio = async (audioBlob) => {
     const formData = new FormData();
+    console.log("1");
     formData.append("audio", audioBlob, "recording.webm");
+    console.log("in uploadAudio");
 
     try {
-      await fetch("/api/audio", {
+      const response = await fetch("/api/audio", {
         method: "POST",
         body: formData,
       });
+
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
+      const data = await response.json(); // <-- parse JSON
+      console.log("Transcription:", data.transcription);
+
+      // If you want to display it on the page:
+      document.getElementById("transcriptionBox").innerText =
+        data.transcription;
     } catch (error) {
       console.error("Upload failed:", error);
     }
